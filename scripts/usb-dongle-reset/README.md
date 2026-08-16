@@ -24,12 +24,23 @@ The normal fix is unplugging the dongle and plugging it back in, which forces it
 2. Keep both files together in the same folder.
 3. Double-click `RestartHeadset.bat`.
 4. Click **Yes** on the permission prompt.
-5. **First run only:** you'll see a numbered list of connected devices. Pick the number matching your wireless dongle (usually something audio- or USB-related). Your choice is saved to a local `headset-device.txt` file next to the scripts, so future runs skip straight to the reset.
-6. Wait a few seconds for the device to reconnect, then check your audio.
+5. **First run only:** you'll see a numbered list of connected devices. Pick the number matching your dongle (usually something audio- or USB-related), then give it a short nickname (e.g. "Headset"). It's saved so future runs skip straight to a menu.
+6. Wait a few seconds for the device to reconnect, then check it.
 
-To make it pick a different device later (e.g. you got a new headset), delete `headset-device.txt` and run the script again — it'll ask you to pick from the list once more.
+On later runs, you'll see a menu like:
+
+```
+[0] Reset ALL saved devices
+[1] Headset
+[2] Mouse dongle
+[3] Add a new device
+```
+
+Pick `0` to reset everything you've saved at once, a specific number to reset just that one, or the "Add a new device" option to save another dongle (e.g. a mouse or webcam receiver) alongside the ones you already have. There's no limit to how many you can save.
 
 ## Notes
 
 - This isn't specific to headsets — it works for any USB device you'd normally fix by unplugging and replugging (mouse/keyboard dongles included), as long as you pick the right one from the list.
-- `headset-device.txt` is machine- and device-specific, so it's excluded from git via `.gitignore` — don't worry if you don't see it after cloning.
+- Saved devices live in `saved-devices.json` next to the scripts, which is machine-specific and excluded from git via `.gitignore` — don't worry if you don't see it after cloning.
+- If a saved device is no longer plugged in, it's automatically dropped from the menu next time you run the script (no need to clean it up yourself).
+- Upgrading from an older version of this script? Your previously saved device (from `headset-device.txt`) is picked up automatically and migrated into the new format the first time you run it.

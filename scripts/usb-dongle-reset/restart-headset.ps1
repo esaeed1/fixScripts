@@ -1,14 +1,46 @@
 # restart-headset.ps1
-# One-click "reset" for a USB wireless dongle (headset, mouse receiver, etc.)
-# by disabling and re-enabling it in Windows, without physically unplugging it.
+# One-click "reset" for USB wireless dongles (headset, mouse receiver, etc.)
+# by disabling and re-enabling them in Windows, without physically unplugging
+# them. Remembers multiple devices by nickname, and can reset one, several,
+# or all of them at once.
 
 $ErrorActionPreference = 'Stop'
-$configPath = Join-Path $PSScriptRoot 'headset-device.txt'
+$configPath = Join-Path $PSScriptRoot 'saved-devices.json'
+$legacyConfigPath = Join-Path $PSScriptRoot 'headset-device.txt'
 
-function Show-Menu {
+function Load-SavedDevices {
+    if (Test-Path $configPath) {
+        try {
+            $json = Get-Content $configPath -Raw | ConvertFrom-Json
+            if ($json -isnot [System.Array]) { $json = @($json) }
+            return @($json)
+        } catch {
+            return @()
+        }
+    }
+
+    # Migrate from the old single-device format used by earlier versions of this script
+    if (Test-Path $legacyConfigPath) {
+        $id = (Get-Content $legacyConfigPath -Raw).Trim()
+        if ($id) {
+            $migrated = @([PSCustomObject]@{ Name = "Saved Device"; InstanceId = $id })
+            Save-SavedDevices $migrated
+            Remove-Item $legacyConfigPath -ErrorAction SilentlyContinue
+            return $migrated
+        }
+    }
+
+    return @()
+}
+
+function Save-SavedDevices($devices) {
+    ConvertTo-Json @($devices) | Out-File -FilePath $configPath -Encoding UTF8
+}
+
+function Pick-NewDevice {
     Write-Host ""
-    Write-Host "=== Select your headset dongle from the list below ===" -ForegroundColor Cyan
-    Write-Host "(Look for the name that matches your wireless headset/dongle.)"
+    Write-Host "=== Select a device from the list below ===" -ForegroundColor Cyan
+    Write-Host "(Look for the name that matches your dongle/receiver.)"
     Write-Host ""
 
     $devices = Get-PnpDevice -PresentOnly | Where-Object {
@@ -17,9 +49,8 @@ function Show-Menu {
     } | Sort-Object Class, FriendlyName
 
     if (-not $devices) {
-        Write-Host "No candidate devices found. Make sure the dongle is plugged in." -ForegroundColor Red
-        Read-Host "Press Enter to close"
-        exit 1
+        Write-Host "No candidate devices found. Make sure it's plugged in." -ForegroundColor Red
+        return $null
     }
 
     $i = 1
@@ -31,45 +62,86 @@ function Show-Menu {
     }
 
     Write-Host ""
-    $choice = Read-Host "Enter the number for your headset dongle"
+    $choice = Read-Host "Enter the number for the device"
     if (-not $indexed.ContainsKey([int]$choice)) {
         Write-Host "Invalid selection." -ForegroundColor Red
-        Read-Host "Press Enter to close"
-        exit 1
+        return $null
     }
 
     $selected = $indexed[[int]$choice]
-    $selected.InstanceId | Out-File -FilePath $configPath -Encoding UTF8
-    Write-Host ""
-    Write-Host ("Saved: {0}" -f $selected.FriendlyName) -ForegroundColor Green
-    Write-Host "Next time you run this script, it'll skip straight to the reset."
-    return $selected.InstanceId
+    $nickname = Read-Host "Give it a short nickname (e.g. 'Headset', 'Mouse dongle') - Enter to use its default name"
+    if ([string]::IsNullOrWhiteSpace($nickname)) { $nickname = $selected.FriendlyName }
+
+    return [PSCustomObject]@{ Name = $nickname; InstanceId = $selected.InstanceId }
 }
 
-# Load saved device, or ask the user to pick one
-if (Test-Path $configPath) {
-    $instanceId = (Get-Content $configPath -Raw).Trim()
-    $exists = Get-PnpDevice -InstanceId $instanceId -ErrorAction SilentlyContinue
-    if (-not $exists) {
-        Write-Host "Saved device not found (maybe unplugged or moved to a different port). Let's pick it again." -ForegroundColor Yellow
-        $instanceId = Show-Menu
+function Reset-Device($device) {
+    Write-Host ("Resetting '{0}'..." -f $device.Name) -ForegroundColor Cyan
+    try {
+        Disable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false
+        Start-Sleep -Seconds 2
+        Enable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false
+        Write-Host ("Done: {0}" -f $device.Name) -ForegroundColor Green
+    } catch {
+        Write-Host ("Failed to reset '{0}': {1}" -f $device.Name, $_) -ForegroundColor Red
+        Write-Host "Make sure you're running this as Administrator." -ForegroundColor Red
+    }
+}
+
+# ---- Main ----
+$saved = Load-SavedDevices
+
+# Drop any saved devices that no longer exist on this PC (unplugged, swapped, etc.)
+$saved = @($saved | Where-Object { $_.InstanceId -and (Get-PnpDevice -InstanceId $_.InstanceId -ErrorAction SilentlyContinue) })
+
+if ($saved.Count -eq 0) {
+    Write-Host "No saved devices yet - let's add one." -ForegroundColor Yellow
+    $new = Pick-NewDevice
+    if ($new) {
+        $saved = @($new)
+        Save-SavedDevices $saved
+        Write-Host ""
+        Reset-Device $new
     }
 } else {
-    $instanceId = Show-Menu
-}
+    Write-Host ""
+    Write-Host "=== What would you like to reset? ===" -ForegroundColor Cyan
+    Write-Host "[0] Reset ALL saved devices"
 
-Write-Host ""
-Write-Host "Resetting device..." -ForegroundColor Cyan
-try {
-    Disable-PnpDevice -InstanceId $instanceId -Confirm:$false
-    Start-Sleep -Seconds 2
-    Enable-PnpDevice -InstanceId $instanceId -Confirm:$false
+    $i = 1
+    $indexed = @{}
+    foreach ($d in $saved) {
+        Write-Host ("[{0}] {1}" -f $i, $d.Name)
+        $indexed[$i] = $d
+        $i++
+    }
+    $addOption = $i
+    Write-Host ("[{0}] Add a new device" -f $addOption)
+
     Write-Host ""
-    Write-Host "Done. Give it a few seconds to reconnect, then check your audio." -ForegroundColor Green
-} catch {
-    Write-Host ""
-    Write-Host "Something went wrong: $_" -ForegroundColor Red
-    Write-Host "Make sure you're running this as Administrator (the .bat launcher should do this automatically)." -ForegroundColor Red
+    $choice = Read-Host "Enter your choice"
+    $choiceInt = 0
+
+    if ([int]::TryParse($choice, [ref]$choiceInt)) {
+        Write-Host ""
+        if ($choiceInt -eq 0) {
+            foreach ($d in $saved) { Reset-Device $d }
+        } elseif ($choiceInt -eq $addOption) {
+            $new = Pick-NewDevice
+            if ($new) {
+                $saved = @($saved) + $new
+                Save-SavedDevices $saved
+                Write-Host ""
+                Reset-Device $new
+            }
+        } elseif ($indexed.ContainsKey($choiceInt)) {
+            Reset-Device $indexed[$choiceInt]
+        } else {
+            Write-Host "Invalid selection." -ForegroundColor Red
+        }
+    } else {
+        Write-Host "Invalid selection." -ForegroundColor Red
+    }
 }
 
 Write-Host ""
