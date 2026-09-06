@@ -6,17 +6,18 @@ Opens your **actual, already-installed Brave browser** using your **real profile
 
 ## What it does
 
-1. Finds the scrollable chat-list container on the page automatically (by checking which element actually scrolls), rather than depending on a specific CSS class name, which Facebook changes often.
+1. Finds every conversation row on the page (by its "More options" button). If there are enough conversations to overflow the visible list, it also finds the scrollable container so it can scroll to force more to load in — but it doesn't require one, since a short list that fits on screen without scrolling is normal and still has real conversations in it.
 2. Grabs the "More options" button for whichever conversation is currently at the top of the list.
 3. Opens that conversation's menu. If a **Leave group** option exists, clicks it and confirms the follow-up dialog.
 4. Re-opens the options menu for that same conversation and clicks **Delete chat**, confirming that dialog too.
-5. Moves on to whatever is now the new top conversation and repeats — scrolling to force more chats to load in as the list empties out.
+5. Moves on to whatever is now the new top conversation and repeats — scrolling to force more chats to load in as the list empties out, if there's a scrollable container to begin with.
 6. Keeps going until the inbox is confirmed empty (double-checked 3 times, in case of a temporary loading pause) or it hits a safety cap of 400 conversations processed in a single run.
 
 ## Built-in safety features
 
 - **Stuck-conversation protection** — if the same conversation title comes up 4 times in a row (meaning delete/leave keeps failing on it), the script skips it and moves on instead of looping forever.
 - **Error recovery** — a DOM hiccup (Facebook re-rendering mid-click, a menu that's slow to open, a container reference going stale) is caught, logged, and the script moves on to the next conversation instead of the whole run dying silently.
+- **Leave is never skipped silently** — if a conversation offers "Leave group" (or similar wording), leaving it is mandatory before delete is attempted. If clicking or confirming that step fails for any reason, the conversation is reported as an error instead of falling through to delete — so a group chat never gets deleted locally without you actually having left the group first.
 - **Randomized pacing** — waits a short, randomized amount of time between conversations (roughly a quarter to half a second) and between individual clicks, instead of firing actions back-to-back with no delay.
 - **Manual stop switch** — press Ctrl+C at any point; it finishes whatever it's currently doing and then stops cleanly.
 - **Summary report** — prints a final count of how many chats were deleted, their titles, and anything it had to skip or error on.
@@ -58,6 +59,18 @@ It checks the standard install locations for your OS. If yours is somewhere else
 - **Never handles credentials.** By using your real, already-logged-in Brave profile instead of a fresh browser, there's usually nothing to log into at all — and when there is, a human (you) does it by hand in a real, visible window. No password ever passes through the script in any form.
 - **Not headless.** You can see exactly what it's doing at all times and step in for anything unexpected.
 - Facebook's login flow is the most heavily monitored part of the site for automated activity — this design sidesteps scripting it entirely rather than trying to do it "safely."
+
+## If it still seems to do nothing
+
+Run the read-only diagnostic instead of the real script:
+
+```bash
+python diagnose.py
+```
+
+It opens Brave the same way, navigates to the Marketplace inbox, waits the same way — but never clicks Leave or Delete. It prints the final URL, whether it thinks you're logged in, how many conversation rows it can actually see, and saves a screenshot (`diagnose-screenshot.png`, gitignored) so you can compare what it sees against what you see. Safe to run any time.
+
+(This is also how the "opened Brave but nothing happened" bug got found and fixed: with a short inbox — few enough conversations that the list doesn't need to scroll — there's no scrollable container on the page at all, and the script used to require finding one before it would even look for conversation rows. It now finds rows directly and only uses a scrollable container opportunistically, when one exists, to load in more.)
 
 ## Notes
 

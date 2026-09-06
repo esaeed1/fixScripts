@@ -43,6 +43,12 @@ async () => {
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
   function jitter(min, max) { return min + Math.random() * (max - min); }
 
+  // Facebook's exact wording for these two menu items has drifted before (e.g. "Leave
+  // group" vs "Leave conversation"), so match a few plausible phrasings case-insensitively
+  // instead of one exact string.
+  const LEAVE_TEXTS = ["leave group", "leave conversation", "leave chat"];
+  const DELETE_TEXTS = ["delete chat", "delete conversation"];
+
   function getListContainer() {
     return Array.from(document.querySelectorAll("div")).find((e) => {
       const s = getComputedStyle(e);
@@ -52,36 +58,48 @@ async () => {
       );
     });
   }
-  function getRowButtons(container) {
-    return Array.from(container.querySelectorAll('[aria-label^="More options for"]'));
+  // Queried page-wide, not scoped to the "scrollable container" — with only a handful of
+  // conversations the list doesn't overflow the visible area at all, so there may be no
+  // scrollable container to find even though the conversation rows are right there in the DOM.
+  function getRowButtons() {
+    return Array.from(document.querySelectorAll('[aria-label^="More options for"]'));
   }
   function getOpenMenuItems() {
     return Array.from(document.querySelectorAll('[role="menuitem"]'));
   }
-  async function clickMenuItemStartingWith(text) {
+  async function clickMenuItemMatching(candidates) {
     for (let i = 0; i < 15; i++) {
       const items = getOpenMenuItems();
-      const item = items.find((el) => el.innerText && el.innerText.trim().startsWith(text));
+      const item = items.find((el) => {
+        const text = (el.innerText || "").trim().toLowerCase();
+        return candidates.some((c) => text.startsWith(c));
+      });
       if (item) { item.click(); return true; }
       await sleep(50);
     }
     return false;
   }
-  async function menuHasItemStartingWith(text) {
+  async function menuHasItemMatching(candidates) {
     for (let i = 0; i < 15; i++) {
       const items = getOpenMenuItems();
-      if (items.some((el) => el.innerText && el.innerText.trim().startsWith(text))) return true;
+      if (items.some((el) => {
+        const text = (el.innerText || "").trim().toLowerCase();
+        return candidates.some((c) => text.startsWith(c));
+      })) return true;
       if (items.length > 0) return false;
       await sleep(50);
     }
     return false;
   }
-  async function clickDialogButtonExact(text) {
+  async function clickDialogButtonMatching(candidates) {
     for (let attempt = 0; attempt < 25; attempt++) {
       const dialog = document.querySelector('[role="dialog"]');
       if (dialog) {
         const buttons = Array.from(dialog.querySelectorAll('[role="button"], button'));
-        const btn = buttons.find((b) => b.innerText && b.innerText.trim() === text);
+        const btn = buttons.find((b) => {
+          const text = (b.innerText || "").trim().toLowerCase();
+          return candidates.some((c) => text === c || text.startsWith(c));
+        });
         if (btn) { btn.click(); return true; }
       }
       await sleep(80);
@@ -101,18 +119,19 @@ async () => {
     );
   }
 
-  let container = getListContainer();
-  if (!container) return { status: "error", title: null, error: "list-container-not-found" };
-
-  container.scrollTop = 0;
-  await sleep(100);
-  let rows = getRowButtons(container);
+  let rows = getRowButtons();
   if (rows.length === 0) {
-    container.scrollTop = container.scrollHeight;
-    await sleep(400);
-    container.scrollTop = 0;
-    await sleep(250);
-    rows = getRowButtons(container);
+    // Nothing found yet. If there's a scrollable container, nudge it to force any lazy
+    // content to render, then re-check. If there's no container at all (a short list has
+    // nothing to scroll), there's nothing more to try — the inbox really is empty.
+    const container = getListContainer();
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+      await sleep(400);
+      container.scrollTop = 0;
+      await sleep(250);
+      rows = getRowButtons();
+    }
     if (rows.length === 0) return { status: "empty" };
   }
 
@@ -122,25 +141,25 @@ async () => {
   rowBtn.click();
   await sleep(jitter(120, 220));
 
-  const hasLeave = await menuHasItemStartingWith("Leave group");
+  const hasLeave = await menuHasItemMatching(LEAVE_TEXTS);
   if (hasLeave) {
-    const clickedLeave = await clickMenuItemStartingWith("Leave group");
-    if (clickedLeave) {
-      const confirmedLeave = await clickDialogButtonExact("Leave group");
-      if (confirmedLeave) {
-        await waitForDialogToClose();
-      } else {
-        pressEscape();
-        return { status: "error", title, error: "could-not-confirm-leave" };
-      }
+    // Leaving is mandatory whenever the option is offered — if any step here fails,
+    // bail out with an error instead of silently falling through to delete, otherwise
+    // a group chat gets deleted locally without you ever actually leaving the group.
+    const clickedLeave = await clickMenuItemMatching(LEAVE_TEXTS);
+    if (!clickedLeave) {
+      pressEscape();
+      return { status: "error", title, error: "could-not-click-leave" };
     }
+    const confirmedLeave = await clickDialogButtonMatching(LEAVE_TEXTS);
+    if (!confirmedLeave) {
+      pressEscape();
+      return { status: "error", title, error: "could-not-confirm-leave" };
+    }
+    await waitForDialogToClose();
     await sleep(jitter(150, 250));
 
-    container = getListContainer();
-    if (!container) return { status: "error", title, error: "list-container-lost-after-leave" };
-    container.scrollTop = 0;
-    await sleep(100);
-    const rowsAfterLeave = getRowButtons(container);
+    const rowsAfterLeave = getRowButtons();
     const rowAgain =
       rowsAfterLeave.find((r) => (r.getAttribute("aria-label") || "").includes(title)) ||
       rowsAfterLeave[0];
@@ -153,12 +172,12 @@ async () => {
     await sleep(jitter(120, 220));
   }
 
-  const clickedDelete = await clickMenuItemStartingWith("Delete chat");
+  const clickedDelete = await clickMenuItemMatching(DELETE_TEXTS);
   if (!clickedDelete) {
     pressEscape();
     return { status: "error", title, error: "delete-option-not-found" };
   }
-  const confirmedDelete = await clickDialogButtonExact("Delete chat");
+  const confirmedDelete = await clickDialogButtonMatching(DELETE_TEXTS);
   if (!confirmedDelete) {
     pressEscape();
     return { status: "error", title, error: "could-not-confirm-delete" };
@@ -171,30 +190,38 @@ async () => {
 COUNT_ALL_JS = """
 async () => {
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+  function getRows() {
+    return Array.from(document.querySelectorAll('[aria-label^="More options for"]'));
+  }
+
+  const seen = new Set();
+  getRows().forEach((b) => seen.add(b.getAttribute("aria-label")));
+
+  // A scrollable container only exists when the list overflows the visible area (i.e. there
+  // are enough conversations to need scrolling) — with a short list there's nothing to scroll,
+  // and the count above is already complete.
   const container = Array.from(document.querySelectorAll("div")).find((e) => {
     const s = getComputedStyle(e);
     return (s.overflowY === "auto" || s.overflowY === "scroll") && e.scrollHeight > e.clientHeight + 50;
   });
-  if (!container) return -1;
+  if (container) {
+    container.scrollTop = 0;
+    await sleep(200);
+    getRows().forEach((b) => seen.add(b.getAttribute("aria-label")));
 
-  const seen = new Set();
-  container.scrollTop = 0;
-  await sleep(200);
-  Array.from(container.querySelectorAll('[aria-label^="More options for"]'))
-    .forEach((b) => seen.add(b.getAttribute("aria-label")));
-
-  let lastScrollTop = -1, stableRounds = 0, iterations = 0;
-  while (stableRounds < 4 && iterations < 500) {
-    container.scrollTop += 400;
-    await sleep(120);
-    Array.from(container.querySelectorAll('[aria-label^="More options for"]'))
-      .forEach((b) => seen.add(b.getAttribute("aria-label")));
-    if (container.scrollTop === lastScrollTop) stableRounds++; else stableRounds = 0;
-    lastScrollTop = container.scrollTop;
-    iterations++;
+    let lastScrollTop = -1, stableRounds = 0, iterations = 0;
+    while (stableRounds < 4 && iterations < 500) {
+      container.scrollTop += 400;
+      await sleep(120);
+      getRows().forEach((b) => seen.add(b.getAttribute("aria-label")));
+      if (container.scrollTop === lastScrollTop) stableRounds++; else stableRounds = 0;
+      lastScrollTop = container.scrollTop;
+      iterations++;
+    }
+    container.scrollTop = 0;
+    await sleep(200);
   }
-  container.scrollTop = 0;
-  await sleep(200);
+
   return seen.size;
 }
 """
