@@ -3,6 +3,15 @@
 *-device.txt
 saved-devices.json
 
+# marketplace-chat-cleaner (Python version): local credentials and saved browser session
+.env
+.browser-profile/
+
+# Python junk
+__pycache__/
+*.pyc
+.venv/
+
 # OS junk
 Thumbs.db
 .DS_Store
