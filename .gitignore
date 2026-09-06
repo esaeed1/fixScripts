@@ -3,10 +3,6 @@
 *-device.txt
 saved-devices.json
 
-# marketplace-chat-cleaner (Python version): local credentials and saved browser session
-.env
-.browser-profile/
-
 # Python junk
 __pycache__/
 *.pyc
@@ -19,4 +15,5 @@ desktop.ini
 
 # Editor junk
 .vscode/
+.idea/
 *.swp

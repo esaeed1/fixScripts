@@ -2,13 +2,14 @@
 """
 Leaves and deletes every conversation in your Messenger Marketplace inbox.
 
-Python/Playwright rewrite of cleanup-marketplace-chats.js — same behavior, but
-this one drives a real, persistent browser session instead of a one-shot
-DevTools console paste, so it can also carry you through login on first run.
+Opens your actual, already-installed Brave browser using your real profile
+(same cookies, same saved logins) instead of a separate managed browser — so
+in the common case you're already logged into Facebook and nothing here ever
+sees or types your password. If you're not logged in, it just pauses and lets
+you log in yourself in the window that opens.
 
 Setup (once):
     pip install -r requirements.txt
-    playwright install chromium
 
 Usage:
     python cleanup_marketplace_chats.py
@@ -16,36 +17,26 @@ Usage:
 To stop early: press Ctrl+C. It finishes whatever it's currently doing, then
 stops cleanly and prints a summary.
 
-See README.md for the full explanation of how login works and why it's
-designed this way.
+See README.md for more on how this finds Brave and why it's designed this way.
 """
 
 import os
 import random
 import sys
 import time
-from getpass import getpass
 from pathlib import Path
 
+import psutil
 from playwright.sync_api import sync_playwright
 
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:
-    pass
-
 MARKETPLACE_URL = "https://www.messenger.com/marketplace/"
-PROFILE_DIR = Path(__file__).parent / ".browser-profile"
 MAX_ITERATIONS = 400  # safety cap, well above any realistic inbox size
 MAX_SAME_TITLE_REPEATS = 4
 
 # Runs once per top conversation in the list: opens its menu, leaves the group
-# (if that option exists) and deletes the chat, confirming both dialogs. This
-# is the same algorithm as cleanup-marketplace-chats.js (including its bug
-# fixes for null containers and stale titles) — kept as one evaluate() call so
-# it can use Facebook's own DOM state directly instead of round-tripping every
+# (if that option exists) and deletes the chat, confirming both dialogs. Kept
+# as one evaluate() call (with retries/null-checks for Facebook's own flaky
+# re-renders) so it can act on the DOM directly instead of round-tripping every
 # micro-step through Playwright locators.
 PROCESS_ONE_JS = """
 async () => {
@@ -213,28 +204,89 @@ def jitter(min_s, max_s):
     return random.uniform(min_s, max_s)
 
 
+def is_brave_running():
+    return any(
+        "brave" in (proc.info.get("name") or "").lower()
+        for proc in psutil.process_iter(["name"])
+    )
+
+
 def is_logged_out(page):
     return page.locator('input[name="pass"]').count() > 0 or "/login" in page.url
 
 
-def do_login(page):
-    """
-    Guided, one-time login. Runs only on the very first use (or if the saved
-    browser profile's session ever expires) — see README.md for why this is
-    safe-ish to automate here but wasn't in the plain DevTools-console version.
-    """
-    email = os.environ.get("FB_EMAIL") or input("Facebook email or phone: ").strip()
-    password = os.environ.get("FB_PASSWORD") or getpass("Facebook password (hidden): ")
+def has_conversation_list(page):
+    return page.locator('[aria-label^="More options for"]').count() > 0
 
-    page.goto("https://www.facebook.com/login")
-    page.fill('input[name="email"]', email)
-    page.fill('input[name="pass"]', password)
-    page.click('button[name="login"]')
-    page.wait_for_timeout(2000)
 
+def goto_marketplace(page):
+    # domcontentloaded, not the default "load" — Messenger keeps live
+    # websocket connections open forever, so waiting for full network idle
+    # would hang. wait_for_page_ready() below handles the actual SPA render.
+    page.goto(MARKETPLACE_URL, wait_until="domcontentloaded", timeout=60000)
+
+
+def wait_for_page_ready(page, timeout_s=45):
+    """Facebook's SPA can take a long time to finish rendering, especially
+    right after Brave launches cold with a full real profile — poll for an
+    actual signal (login form or the conversation list) instead of guessing
+    a fixed delay."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if is_logged_out(page):
+            return "login"
+        if has_conversation_list(page):
+            return "list"
+        time.sleep(0.5)
+    return "timeout"
+
+
+def find_brave_executable():
+    """Locate the user's real Brave install. Override with BRAVE_PATH if it's
+    somewhere non-standard."""
+    override = os.environ.get("BRAVE_PATH")
+    if override:
+        return override
+
+    if sys.platform == "win32":
+        local_appdata = os.environ.get("LOCALAPPDATA", "")
+        program_files = os.environ.get("PROGRAMFILES", r"C:\Program Files")
+        program_files_x86 = os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")
+        candidates = [
+            os.path.join(local_appdata, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+            os.path.join(program_files, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+            os.path.join(program_files_x86, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+        ]
+    elif sys.platform == "darwin":
+        candidates = ["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"]
+    else:
+        candidates = ["/usr/bin/brave-browser", "/usr/bin/brave", "/snap/bin/brave"]
+
+    return next((c for c in candidates if c and os.path.isfile(c)), None)
+
+
+def find_brave_user_data_dir():
+    """Locate Brave's real profile folder (cookies, saved logins, everything).
+    Override with BRAVE_USER_DATA_DIR if it's somewhere non-standard."""
+    override = os.environ.get("BRAVE_USER_DATA_DIR")
+    if override:
+        return override
+
+    if sys.platform == "win32":
+        local_appdata = os.environ.get("LOCALAPPDATA", "")
+        return os.path.join(local_appdata, "BraveSoftware", "Brave-Browser", "User Data")
+    elif sys.platform == "darwin":
+        return str(Path.home() / "Library" / "Application Support" / "BraveSoftware" / "Brave-Browser")
+    else:
+        return str(Path.home() / ".config" / "BraveSoftware" / "Brave-Browser")
+
+
+def wait_for_manual_login(page):
+    """This script never handles your password in any form — if you're not
+    already logged in via your real Brave profile, you log in by hand here."""
     print(
-        "\nIf Facebook is showing a security check, a code prompt, or a "
-        "'save this browser' screen, handle it in the browser window now."
+        "\nNot logged in yet. Log into Facebook/Messenger yourself in the Brave "
+        "window that just opened — this script never sees or types your password."
     )
     input("Press Enter here once you're logged in and can see Messenger... ")
 
@@ -332,28 +384,67 @@ def run_cleanup(page):
 
 
 def main():
-    PROFILE_DIR.mkdir(exist_ok=True)
+    if is_brave_running():
+        print(
+            "Brave appears to already be running. Chromium-based browsers only allow "
+            "one process per profile, so close every Brave window first — check the "
+            "system tray and Task Manager for any lingering 'Brave' process, since a "
+            "background instance can keep running after you close the last window — "
+            "then re-run this script."
+        )
+        sys.exit(1)
+
+    brave_path = find_brave_executable()
+    if not brave_path:
+        print(
+            "Could not find Brave automatically. Set the BRAVE_PATH environment "
+            "variable to your brave.exe location and try again."
+        )
+        sys.exit(1)
+    user_data_dir = find_brave_user_data_dir()
+    print(f"Using Brave at: {brave_path}")
 
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            str(PROFILE_DIR),
-            headless=False,
-            viewport={"width": 1280, "height": 900},
-        )
+        try:
+            context = p.chromium.launch_persistent_context(
+                user_data_dir,
+                executable_path=brave_path,
+                headless=False,
+                no_viewport=True,
+            )
+        except Exception:
+            print(
+                "Could not open Brave with your existing profile — this usually "
+                "means Brave is still running somewhere. Close every Brave window "
+                "(check the system tray / Task Manager) and try again."
+            )
+            raise
+
         page = context.pages[0] if context.pages else context.new_page()
-        page.goto(MARKETPLACE_URL)
-        page.wait_for_timeout(1500)
+        print("Loading Messenger Marketplace — this can take a while on a cold start...")
+        goto_marketplace(page)
+        page.wait_for_timeout(20000)  # flat wait for the first load before checking anything
+        state = wait_for_page_ready(page)
 
-        if is_logged_out(page):
-            print("Not logged in yet in this browser profile.")
-            do_login(page)
-            page.goto(MARKETPLACE_URL)
-            page.wait_for_timeout(1500)
+        if state == "login":
+            wait_for_manual_login(page)
+            goto_marketplace(page)
+            state = wait_for_page_ready(page)
 
-        if is_logged_out(page):
-            print("Still doesn't look logged in — aborting.")
-            context.close()
-            sys.exit(1)
+        if state != "list":
+            print(
+                f"\nStill don't see the Marketplace inbox list (currently at {page.url}, "
+                f"state={state}).\n"
+                "If Facebook redirected you somewhere else (e.g. a single open "
+                "conversation instead of the inbox list), navigate to the Marketplace "
+                "inbox yourself in the Brave window now."
+            )
+            input("Press Enter here once the conversation list is visible... ")
+            state = wait_for_page_ready(page, timeout_s=20)
+            if state != "list":
+                print("Still can't find any conversations — aborting.")
+                context.close()
+                sys.exit(1)
 
         run_cleanup(page)
         context.close()

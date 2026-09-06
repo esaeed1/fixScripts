@@ -10,7 +10,7 @@ Most of these are Windows utility scripts (PowerShell + Batch, no installs requi
 |---|---|
 | [`usb-dongle-reset`](scripts/usb-dongle-reset) | Resets a USB wireless dongle (headset, mouse receiver, etc.) in software — no need to physically unplug it. Fixes issues like a wireless headset's audio quality dropping once the microphone is used. |
 | [`window-finder`](scripts/window-finder) | Lists every open window — including minimized ones or ones parked off-screen — and jumps straight to the one you pick. Fixes "I have a ton of windows/monitors open and can't find the one I want." |
-| [`marketplace-chat-cleaner`](scripts/marketplace-chat-cleaner) | Leaves and deletes every conversation in your Messenger Marketplace inbox in one pass, instead of clicking through each one by hand. Python/Playwright script that also handles login. |
+| [`marketplace-chat-cleaner`](scripts/marketplace-chat-cleaner) | Leaves and deletes every conversation in your Messenger Marketplace inbox in one pass, instead of clicking through each one by hand. Python script that drives your existing Brave browser/login. |
 
 More scripts will be added over time — see [Contributing](#contributing) if you want to add your own.
 
@@ -20,7 +20,7 @@ More scripts will be added over time — see [Contributing](#contributing) if yo
 
 **window-finder** — Enumerates every open window on the PC (via the Win32 API), including ones that are minimized or positioned off-screen (e.g. because a monitor got disconnected), and shows them as a searchable numbered list. Picking one restores it if minimized, forces it to the foreground even past Windows' normal "don't let background apps steal focus" block, nudges it back on-screen if it's parked somewhere invisible, and blinks its taskbar icon so it's easy to spot.
 
-**marketplace-chat-cleaner** — Drives a real, persistent browser session that logs into Messenger once (saving the session locally for next time) and then walks the Marketplace conversation list from the top: opens each conversation's options menu, leaves it (if a "Leave group" option is offered), deletes it, confirms both actions, and moves to the next one — scrolling to force more conversations to load in as the list empties. It has a stuck-conversation safeguard (skips a conversation after repeated failures instead of looping forever), randomized human-like pacing between actions, error recovery instead of dying on the first DOM hiccup, and a summary of what was deleted when it finishes.
+**marketplace-chat-cleaner** — Opens your actual, already-installed Brave browser with your real profile (so you're typically already logged into Facebook — the script never handles a password), then walks the Marketplace conversation list from the top: opens each conversation's options menu, leaves it (if a "Leave group" option is offered), deletes it, confirms both actions, and moves to the next one — scrolling to force more conversations to load in as the list empties. It has a stuck-conversation safeguard (skips a conversation after repeated failures instead of looping forever), randomized human-like pacing between actions, error recovery instead of dying on the first DOM hiccup, and a summary of what was deleted when it finishes.
 
 ## Requirements
 
@@ -31,7 +31,7 @@ More scripts will be added over time — see [Contributing](#contributing) if yo
 
 **Python scripts** (`marketplace-chat-cleaner`):
 - Python 3.9+
-- `pip install -r requirements.txt` then `playwright install chromium` (installs a managed Chromium binary — see its README).
+- `pip install -r requirements.txt` — that's it, no separate browser download. It drives your existing Brave install directly (see its README).
 
 ## Usage
 

@@ -2,7 +2,7 @@
 
 Leaves and deletes every conversation in your Messenger Marketplace inbox automatically — no need to click through each chat one by one, and no need to re-run it manually as more chats load in.
 
-Uses [Playwright](https://playwright.dev/python/) to drive a real, persistent Chromium profile: it logs you in the first time, then reuses that saved session on every run after, so most runs never touch the login form at all.
+Opens your **actual, already-installed Brave browser** using your **real profile** — same cookies, same saved logins as when you open Brave normally. In the common case you're already logged into Facebook from everyday use, so the script never sees or handles a password at all. If you're not logged in, it just pauses and lets you log in yourself in the window that opens.
 
 ## What it does
 
@@ -24,21 +24,16 @@ Uses [Playwright](https://playwright.dev/python/) to drive a real, persistent Ch
 ## Requirements
 
 - Python 3.9+
-- A Chromium browser binary managed by Playwright (installed via the steps below — this is separate from any Chrome/Edge you already have).
+- Brave already installed at a normal location (or set `BRAVE_PATH`/`BRAVE_USER_DATA_DIR` — see below).
+- **Brave must be fully closed before you run the script.** Chromium-based browsers only allow one process per profile, so the script launches its own Brave process against your real profile folder. The script checks for a running Brave process first and refuses to start with a clear message if it finds one — closing just the last window isn't always enough, since Brave can keep a background process alive after that; check the system tray and Task Manager for a lingering `brave.exe`/`Brave` process too.
 
 ## Setup (once)
 
 ```bash
 pip install -r requirements.txt
-playwright install chromium
 ```
 
-## Credentials
-
-The script never has your password written into it. On the first run (or if the saved session ever expires), it asks for your email and password:
-
-- Set `FB_EMAIL` and `FB_PASSWORD` environment variables (or copy `.env.example` to `.env` and fill it in — `.env` is gitignored), **or**
-- Just leave them unset — it'll prompt you interactively, with the password hidden as you type.
+No `playwright install` step needed — this points Playwright at your existing Brave install instead of downloading a separate managed browser.
 
 ## Usage
 
@@ -46,23 +41,27 @@ The script never has your password written into it. On the first run (or if the 
 python cleanup_marketplace_chats.py
 ```
 
-- A real Chromium window opens (not headless) so you can watch it and step in if needed.
-- **First run only:** if you're not already logged in, it navigates to the Facebook login page, fills in your credentials, and submits. If Facebook shows a security check, a code prompt, or a "save this browser" screen, handle it in the browser window, then press Enter at the prompt in your terminal to continue. Your session is then saved into a local `.browser-profile/` folder (gitignored) and reused on every future run — so this login flow typically only happens once.
+- Your real Brave opens with your real profile. If you're already logged into Facebook there (likely, from normal use), it goes straight into cleanup.
+- If you're not logged in, the script pauses and tells you so — log in yourself in that window (2FA, checkpoints, saved passwords, whatever you'd normally do), then press Enter in the terminal to continue. The script itself never reads, stores, or types your password.
+- Facebook's Messenger is a heavy, slow-loading SPA, and a freshly launched Brave process loading a full real profile makes that worse. On the very first navigation, the script waits a flat 20 seconds before checking anything, then polls for the actual page content (up to 45 more seconds) instead of guessing further. If it still doesn't recognize the page after that (for example, Facebook opened a specific conversation instead of the Marketplace inbox list), it tells you the current URL and pauses so you can navigate to the right place yourself, then continue with Enter.
 - To stop early: press **Ctrl+C** in the terminal. It finishes whatever it's currently doing, then stops cleanly and prints the summary.
 
-## Why automating login is reasonable here (but still not risk-free)
+### If Brave isn't found automatically
 
-A Playwright script is a real, persistent program — it isn't destroyed by page navigation the way a DevTools console paste would be, so it can actually carry you through login and into the cleanup in one run. A few choices keep this from being reckless:
+It checks the standard install locations for your OS. If yours is somewhere else, set:
 
-- **Credentials are never stored in a file.** They come from environment variables you control or a masked interactive prompt, never hardcoded.
-- **It only logs in once.** After that, the saved browser profile keeps you signed in like a normal browser would, so subsequent runs don't touch the login form at all.
-- **It's not headless.** You can see exactly what it's doing and step in for any 2FA/checkpoint yourself.
+- `BRAVE_PATH` — full path to the Brave executable (`brave.exe` on Windows).
+- `BRAVE_USER_DATA_DIR` — full path to Brave's profile folder (its "User Data" directory), if that's non-standard too.
 
-That said, Meta's login flow is the most heavily monitored part of the site for automated activity, more so than clicking around an inbox you're already signed into. Scripted logins can still occasionally trigger a security checkpoint even for the account owner. If that happens, just complete it in the visible browser window — the script waits for you to confirm before continuing.
+## Why this design
+
+- **Never handles credentials.** By using your real, already-logged-in Brave profile instead of a fresh browser, there's usually nothing to log into at all — and when there is, a human (you) does it by hand in a real, visible window. No password ever passes through the script in any form.
+- **Not headless.** You can see exactly what it's doing at all times and step in for anything unexpected.
+- Facebook's login flow is the most heavily monitored part of the site for automated activity — this design sidesteps scripting it entirely rather than trying to do it "safely."
 
 ## Notes
 
 - This **permanently deletes** chat history — there's no undo once a conversation is deleted. Consider watching the first few go through before walking away.
 - This automates actions on your own account by interacting with the page itself (it doesn't scrape or touch anyone else's data), but Meta's terms don't technically permit scripted interaction with their site. Run at a reasonable pace, it behaves like normal manual use, but there's always some chance of a temporary rate-limit or verification prompt.
 - Facebook's page structure changes periodically. If it stops finding conversations or menu items, right-click → Inspect on a conversation row's "..." button and check its `aria-label` — that's usually the first thing to change.
-- The saved session lives in `.browser-profile/` next to the script. Delete that folder to force a fresh login (e.g. if you want to switch accounts).
+- Since this runs your actual Brave against your actual profile, closing the script's Brave window mid-run is equivalent to closing your browser normally — nothing is lost beyond the run stopping.
