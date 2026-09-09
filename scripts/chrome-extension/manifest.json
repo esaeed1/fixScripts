@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "VitalSource to PDF",
+  "version": "2.0.0",
+  "description": "Save your purchased VitalSource ebooks as PDF. Captures pages through the web reader and compiles them into a single downloadable PDF.",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "scripting",
+    "downloads",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "*://*.vitalsource.com/*",
+    "*://*.chegg.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "VitalSource to PDF"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.vitalsource.com/*",
+        "*://*.chegg.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

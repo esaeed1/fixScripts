@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>VitalSource to PDF</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Header -->
+  <header>
+    <span class="logo-vs">VS</span>
+    <span class="header-title">VitalSource to PDF</span>
+  </header>
+
+  <!-- Not on VitalSource -->
+  <div id="not-vs" hidden>
+    <p class="hint">Open a VitalSource book in the reader to use this extension.</p>
+  </div>
+
+  <!-- Main UI -->
+  <div id="main" hidden>
+
+    <!-- Double-page notice -->
+    <div class="notice">
+      <span class="notice-icon">⚙</span>
+      <span>
+        <b>Before scanning:</b> Open <b>Reader Preferences</b> (Aa icon) and
+        set view mode to <b>Single Page</b> or
+        <b class="green">Double Page</b> <em>(recommended)</em>.
+      </span>
+    </div>
+
+    <div class="notice-img">
+      <div class="fake-dialog">
+        <div class="fake-dialog-title">Reader Preferences</div>
+        <div class="fake-tabs">
+          <span class="tab active">Display</span>
+          <span class="tab">Highlighters</span>
+          <span class="tab">Sharing</span>
+        </div>
+        <div class="fake-label">Reader View</div>
+        <div class="fake-btns">
+          <div class="fake-btn">Default</div>
+          <div class="fake-btn">Single Page</div>
+          <div class="fake-btn selected">⊞ Double Page</div>
+        </div>
+      </div>
+      <div class="arrow-hint">← set this</div>
+    </div>
+
+    <!-- Book info -->
+    <div class="book-bar" id="book-bar">
+      <span id="book-title" class="book-title">Loading…</span>
+    </div>
+
+    <!-- Page count input -->
+    <div class="field-row">
+      <label for="page-count">Pages to scan:</label>
+      <input type="number" id="page-count" min="1" value="10">
+    </div>
+
+    <!-- Controls -->
+    <div class="section-label">CONTROLS</div>
+    <div class="controls-grid">
+      <button id="btn-scan"   class="btn btn-scan">▶ Start Scan</button>
+      <button id="btn-stop"   class="btn btn-stop"   disabled>■ Stop</button>
+      <button id="btn-clear"  class="btn btn-clear"  disabled>🗑 Clear</button>
+      <button id="btn-pdf"    class="btn btn-pdf"    disabled>📄 Create PDF</button>
+    </div>
+
+    <!-- Progress bar (during scan) -->
+    <div id="scan-progress" hidden>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-text" id="progress-text">0 / 0 pages</div>
+    </div>
+
+    <!-- Thumbnails -->
+    <div class="section-label" id="preview-label" hidden>PAGE PREVIEW</div>
+    <div id="thumb-grid" hidden></div>
+    <div id="count-line" hidden class="count-line">0 pages captured</div>
+
+    <!-- Settings -->
+    <div class="section-label">SETTINGS</div>
+
+    <div class="setting-row">
+      <label for="delay-input">Delay between pages (ms):</label>
+      <input type="number" id="delay-input" min="500" max="10000" step="250" value="1500">
+    </div>
+    <div class="setting-hint">💡 Increase if pages don't load completely</div>
+
+    <div class="setting-row">
+      <label for="quality-select">Screenshot quality:</label>
+      <select id="quality-select">
+        <option value="png">High (PNG)</option>
+        <option value="jpeg-92" selected>Medium (JPEG)</option>
+        <option value="jpeg-70">Low (JPEG)</option>
+      </select>
+    </div>
+    <div class="setting-hint">🟦 Lower quality = smaller file size</div>
+
+    <label class="check-row">
+      <input type="checkbox" id="crop-toggle" checked>
+      Crop to book content area
+    </label>
+
+  </div>
+
+</div>
+
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="sidepanel.js"></script>
+</body>
+</html>
