@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>VitalSource to PDF</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <span class="logo-vs">VS</span>
+    <span class="header-title">VitalSource to PDF</span>
+  </header>
+
+  <!-- Not on VitalSource -->
+  <div id="not-vs" hidden>
+    <p class="hint">Open a VitalSource book in the reader, then click this panel.</p>
+  </div>
+
+  <!-- Main UI -->
+  <div id="main" hidden>
+
+    <!-- Double-page notice -->
+    <div class="notice">
+      <span class="notice-icon">⚙</span>
+      <span>Open <b>Reader Preferences</b> (Aa icon) → set <b>Single Page</b> or <b class="green">Double Page</b>, then navigate to your <b>starting page</b> before scanning.</span>
+    </div>
+
+    <!-- Book info -->
+    <div class="book-bar">
+      <span id="book-title" class="book-title">Loading…</span>
+    </div>
+
+    <!-- Page count -->
+    <div class="range-block">
+      <div class="range-header">
+        <span class="range-type">Pages to capture</span>
+      </div>
+      <div class="pages-row">
+        <div class="pages-hint">Starting from current reader position →</div>
+        <div class="pages-input-row">
+          <input type="number" id="page-count" min="1" max="2000" placeholder="e.g. 265">
+          <span class="pages-unit">pages</span>
+        </div>
+        <div class="pages-sub">Leave blank to scan until you press Stop</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-grid">
+      <button id="btn-scan"  class="btn btn-scan">▶ Start Scan</button>
+      <button id="btn-stop"  class="btn btn-stop"  disabled>■ Stop</button>
+      <button id="btn-clear" class="btn btn-clear" disabled>🗑 Clear</button>
+      <button id="btn-pdf"   class="btn btn-pdf"   disabled>📄 Create PDF</button>
+    </div>
+
+    <!-- Progress -->
+    <div id="scan-progress" hidden>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-text" id="progress-text">0 pages</div>
+    </div>
+
+    <!-- Thumbnails -->
+    <div class="section-label" id="preview-label" hidden>PAGE PREVIEW</div>
+    <div id="thumb-grid" hidden></div>
+    <div id="count-line" hidden class="count-line">0 pages captured</div>
+
+    <!-- Advanced settings (collapsible) -->
+    <details class="advanced-wrap">
+      <summary class="advanced-toggle">⚙ Advanced</summary>
+      <div class="advanced-body">
+        <div class="setting-row">
+          <label for="delay-input">Delay between pages (ms):</label>
+          <input type="number" id="delay-input" min="500" max="10000" step="250" value="1500">
+        </div>
+        <div class="setting-hint">💡 Increase if pages don't load completely</div>
+
+        <div class="setting-row">
+          <label for="quality-select">Screenshot quality:</label>
+          <select id="quality-select">
+            <option value="png">High (PNG)</option>
+            <option value="jpeg-92" selected>Medium (JPEG)</option>
+            <option value="jpeg-70">Low (JPEG)</option>
+          </select>
+        </div>
+        <label class="check-row">
+          <input type="checkbox" id="crop-toggle" checked>
+          Crop to book content area
+        </label>
+      </div>
+    </details>
+
+  </div>
+</div>
+
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="sidepanel.js"></script>
+</body>
+</html>
