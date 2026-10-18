@@ -1,0 +1,29 @@
+Software download links (installers removed from repo to keep it small)
+
+Burp Suite Desktop 2026.7.3 (Windows x64)
+  https://portswigger.net/burp/releases/startdownload?product=desktop&version=2026.7.3&type=WindowsX64
+  Releases: https://portswigger.net/burp/releases
+
+Dimmer (Nelson Pires)
+  https://www.nelsonpires.com/software/dimmer
+
+Geek Uninstaller (portable, contains geek.exe)
+  https://geekuninstaller.com/geek.zip
+
+Logi Options+
+  https://download01.logi.com/web/ftp/pub/techsupport/optionsplus/logioptionsplus_installer.exe
+
+Rufus 4.15
+  https://github.com/pbatard/rufus/releases/download/v4.15/rufus-4.15.exe
+  Latest: https://rufus.ie
+
+SD Card Formatter 5.0.3 (Windows)
+  https://www.sdcard.org/downloads/formatter/eula_windows/SDCardFormatterv5_WinEN.zip
+  Page: https://www.sdcard.org/downloads/formatter/
+
+Vaydeer Keyboard 1.2.3
+  https://downloads.vaydeer.com/keyboard/win32/Vaydeer%20keyboard%20Setup%201.2.3.exe
+  Page: https://www.vaydeer.com/pages/downloads
+
+Wispr Flow (latest)
+  https://dl.wisprflow.ai/windows/latest
