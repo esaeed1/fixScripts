@@ -1,0 +1,8 @@
+# Conversations to keep: one name, phone number or fragment per line.
+# Matched case-insensitively against the chat title in the inbox list;
+# phone numbers are matched digits-to-digits, so formatting does not matter.
+# Lines starting with # are ignored, so the examples below do nothing.
+
+# Alexis
+# +1 (555) 555-0123
+Karen · New – men’s work clothes - shirts/shorts $10 - pants $15
